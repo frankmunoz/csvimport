@@ -33,7 +33,7 @@ Project showing how to import data from __CSV file__, also matching CSV columns 
 ### Demo
 
 You can test the demo here [CSV File in Heroku](http://nameless-scrubland-32903.herokuapp.com)
-- __User__: _test_
+- __User__: _test@gmail.com_
 - __Password__: _test&csv%demo1_
 
 Generated CSV files
