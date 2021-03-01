@@ -60,10 +60,13 @@
 
                     <!-- Branding Image -->
                     <ul class="top-nav-bar">
-                        <li><a class="navbar-brand" href="{{ url('/') }}">Import Contacts</a></li>
-                        <li><a href="contacts">View Contacts</a></li>
-                        <li><a href="files">View Files</a></li>
-                        <li><a href="#">About</a></li>
+                        @guest
+                            <li>Laravel CSV Import <Contacts></Contacts></li>
+                        @else
+                            <li><a class="navbar-brand" href="{{ url('/') }}">Import Contacts</a></li>
+                            <li><a href="contacts">View Contacts</a></li>
+                            <li><a href="files">View Files</a></li>
+                        @endguest
                     </ul>
                 </div>
 

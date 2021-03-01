@@ -8,6 +8,7 @@ use App\Http\Requests\CsvImportRequest;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 use Auth;
+use mysql_xdevapi\Exception;
 
 class ImportController extends Controller
 {
@@ -125,17 +126,26 @@ class ImportController extends Controller
     }
 
     private function evalBirthdate($row, &$error){
-        if(is_array($row)){
-            return $row['date'];
-        }
-        $error[] = "Date format not valid";
+        $format1 = 'Y-m-d';
+        $format2 = 'Ymd';
         if(empty($row)){
             $error[] = "Birthdate is empty";
+            return $row;
+        }else{
+            $d1 = \DateTime::createFromFormat($format1, $row);
+            $d2 = \DateTime::createFromFormat($format2, $row);
+            if (!(($d1 && $d1->format($format1) == $row) || ($d2 && $d2->format($format2) == $row)) ){
+                $error[] = "Date format not valid";
+            }
+            return $row;
         }
-        return '';
     }
 
     private function evalName($row, &$error){
+        if(empty($row)){
+            $error[] = "Name is empty";
+            return '';
+        }
         if(!preg_match("/^(?=.{3,120}$)[a-zA-Z](\s?[a-zA-Z-])*$/", trim($row))){
             $error[] = "Name format not valid";
         }
@@ -165,43 +175,71 @@ class ImportController extends Controller
     }
 
     private function evalFranchise($creditCardNumber, &$error){
-        $franchise = self::checkCreditCardNumber($creditCardNumber);
+        $franchise = "";
+        if(!empty($creditCardNumber)){
+            $franchise = self::checkCreditCardNumber($creditCardNumber);
+        }
         if(empty($franchise)){
             $error[] = "Credit Card Number not valid";
-            $franchise = '';
         }
         return $franchise;
     }
 
     function checkCreditCardNumber($cc, $extra_check = false){
-        $cards = array(
-            "visa" => "(4\d{12}(?:\d{3})?)",
-            "amex" => "(3[47]\d{13})",
-            "jcb" => "(35[2-8][89]\d\d\d{10})",
-            "maestro" => "((?:5020|5038|6304|6579|6761)\d{12}(?:\d\d)?)",
-            "solo" => "((?:6334|6767)\d{12}(?:\d\d)?\d?)",
-            "mastercard" => "(5[1-5]\d{14})",
-            "switch" => "(?:(?:(?:4903|4905|4911|4936|6333|6759)\d{12})|(?:(?:564182|633110)\d{10})(\d\d)?\d?)",
-            "discover" => "/^6(?:011\d{12}|5\d{14}|4[4-9]\d{13}|22(?:1(?:2[6-9]|[3-9]\d)|[2-8]\d{2}|9(?:[01]\d|2[0-5]))\d{10})$/",
-        );
-        $names = array(
-            "Visa",
-            "American Express",
-            "JCB",
-            "Maestro",
-            "Solo",
-            "Mastercard",
-            "Switch",
-            "Discover"
-        );
-        $matches = array();
-        $pattern = "#^(?:" . implode("|", $cards) . ")$#";
-        $result = preg_match($pattern, str_replace(" ", "", $cc) , $matches);
-        if ($extra_check && $result > 0)
-        {
-            $result = (validatecard($cc)) ? 1 : 0;
+        try {
+            $cards = array(
+                "visa" => "(4\d{12}(?:\d{3})?)",
+                "amex" => "(3[47]\d{13})",
+                "jcb" => "(35[2-8][89]\d\d\d{10})",
+                "maestro" => "((?:5020|5038|6304|6579|6761)\d{12}(?:\d\d)?)",
+                "solo" => "((?:6334|6767)\d{12}(?:\d\d)?\d?)",
+                "mastercard" => "(5[1-5]\d{14})",
+                "switch" => "(?:(?:(?:4903|4905|4911|4936|6333|6759)\d{12})|(?:(?:564182|633110)\d{10})(\d\d)?\d?)",
+                "discover" => "/^6(?:011\d{12}|5\d{14}|4[4-9]\d{13}|22(?:1(?:2[6-9]|[3-9]\d)|[2-8]\d{2}|9(?:[01]\d|2[0-5]))\d{10})$/",
+
+                "bankcard" => "^(?:4[0-9]{12}(?:[0-9]{3})?|[25][1-7][0-9]{14}|6(?:011|5[0-9][0-9])[0-9]{12}|3[47][0-9]{13}|3(?:0[0-5]|[68][0-9])[0-9]{11}|(?:2131|1800|35\d{3})\d{11})$",
+                "china-unionpay" => "^(62[0-9]{14,17})$",
+                "visa-electron" => "^(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14})$",
+                "diners-club-carte-blanche" => "^3(?:0[0-5]|[68][0-9])[0-9]{11}$",
+                "diners-club-international" => "^3(?:0[0-5]|[68][0-9])[0-9]{11}$",
+                "diners-club-enroute" => "^3(?:0[0-5]|[68][0-9])[0-9]{11}$",
+                "diners-club-us-ca" => "^3(?:0[0-5]|[68][0-9])[0-9]{11}$",
+                "instapayment" => "^63[7-9][0-9]{13}$",
+                "laser" => "^(6304|6706|6709|6771)[0-9]{12,15}$",
+                "solo" => "^(6334|6767)[0-9]{12}|(6334|6767)[0-9]{14}|(6334|6767)[0-9]{15}$",
+            );
+            $names = array(
+                "Visa",
+                "American Express",
+                "JCB",
+                "Maestro",
+                "Solo",
+                "Mastercard",
+                "Switch",
+                "Discover",
+
+                "Bankcard",
+                "China-unionpay",
+                "Visa-electron",
+                "Diners-club-carte-blanche",
+                "Diners-club-international",
+                "Diners-club-enroute",
+                "Diners-club-us-ca",
+                "Instapayment",
+                "Laser",
+                "Solo",
+            );
+            $matches = array();
+            $pattern = "#^(?:" . implode("|", $cards) . ")$#";
+            $result = preg_match($pattern, str_replace(" ", "", $cc) , $matches);
+            if ($extra_check && $result > 0)
+            {
+                $result = (validatecard($cc)) ? 1 : 0;
+            }
+            return ($result > 0) ? $names[sizeof($matches) - 2] : 'No found';
+        }catch (\Exception $e){
+            return 'Not found';
         }
-        return ($result > 0) ? $names[sizeof($matches) - 2] : false;
     }
 
     function evalEmail($row, &$error)
