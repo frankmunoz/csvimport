@@ -28,7 +28,7 @@ class Contact extends Migration
             $table->string('error');
             $table->timestamps();
         });
-        Schema::alter('contacts', function (Blueprint $table) {
+        Schema::table('contacts', function (Blueprint $table) {
             $table->foreign('user_id')->references('id')->on('users');
             $table->foreign('csv_data_id')->references('id')->on('csv_data');
         });
