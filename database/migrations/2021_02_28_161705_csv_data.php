@@ -1,10 +1,10 @@
 <?php
 
-use Illuminate\Support\Facades\Schema;
-use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 
-class CreateCsvDataTable extends Migration
+class CsvData extends Migration
 {
     /**
      * Run the migrations.
@@ -15,6 +15,7 @@ class CreateCsvDataTable extends Migration
     {
         Schema::create('csv_data', function (Blueprint $table) {
             $table->increments('id');
+            $table->integer('csv_status');
             $table->string('csv_filename');
             $table->boolean('csv_header')->default(0);
             $table->longText('csv_data');
