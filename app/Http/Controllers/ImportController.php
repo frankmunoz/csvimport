@@ -54,69 +54,77 @@ class ImportController extends Controller
 
     public function processImport(Request $request)
     {
-        $data = CsvData::find($request->csv_data_file_id);
-        $csv_data = json_decode($data->csv_data, true);
-        foreach ($csv_data as $row) {
-            $contact = new Contact();
-            $error = [];
-            $creditCardNumber="";
-            foreach (config('app.db_fields') as $index => $field) {
-                $inter = array_flip($request->fields);
-                if ($data->csv_header) {
-                    switch ($field){
-                        case "name":
-                            $contact->$field = self::evalName($row[$inter[$field]],$error);
-                            break;
-                        case "birthdate":
-                            $contact->$field = self::evalBirthdate($row[$inter[$field]],$error);
-                            break;
-                        case "phone":
-                            $contact->$field = self::evalPhone($row[$inter[$field]],$error);
-                            break;
-                        case "address":
-                            $contact->$field = self::evalAddress($row[$inter[$field]],$error);
-                            break;
-                        case "credit_card":
-                            $creditCardNumber = $contact->$field = $row[$inter[$field]];
-                            break;
-                        case "email":
-                            $contact->$field = self::evalEmail($row[$inter[$field]],$error);
-                            break;
-                        default:
-                            $contact->$field = $row[$inter[$field]];
-                            break;
-                    }
-                } else {
-                    if($field=="birthdate"){
-                        $contact->$field = self::evalBirthdate($row[$inter[$field]]);
-                    }else{
-                        $contact->$field = $row[$inter[$index]];
+        try {
+            $data = CsvData::find($request->csv_data_file_id);
+            $csv_data = json_decode($data->csv_data, true);
+            foreach ($csv_data as $row) {
+                $contact = new Contact();
+                $error = [];
+                $creditCardNumber="";
+                foreach (config('app.db_fields') as $index => $field) {
+                    $inter = array_flip($request->fields);
+                    if ($data->csv_header) {
+                        switch ($field){
+                            case "name":
+                                $contact->$field = self::evalName($row[$inter[$field]],$error);
+                                break;
+                            case "birthdate":
+                                $contact->$field = self::evalBirthdate($row[$inter[$field]],$error);
+                                break;
+                            case "phone":
+                                $contact->$field = self::evalPhone($row[$inter[$field]],$error);
+                                break;
+                            case "address":
+                                $contact->$field = self::evalAddress($row[$inter[$field]],$error);
+                                break;
+                            case "credit_card":
+                                $creditCardNumber = $contact->$field = $row[$inter[$field]];
+                                break;
+                            case "email":
+                                $contact->$field = self::evalEmail($row[$inter[$field]],$error);
+                                break;
+                            default:
+                                $contact->$field = $row[$inter[$field]];
+                                break;
+                        }
+                    } else {
+                        if($field=="birthdate"){
+                            $contact->$field = self::evalBirthdate($row[$inter[$field]]);
+                        }else{
+                            $contact->$field = $row[$inter[$index]];
+                        }
                     }
                 }
+
+                $contact->csv_data_id = $request->csv_data_file_id;
+                $contact->credit_card = $creditCardNumber?self::cryptCreditCardNumber($creditCardNumber):'';
+                $contact->franchise = self::evalFranchise($creditCardNumber, $error);
+                $contact->status = count($error)?2:1;
+                $contact->error = implode(' | ',$error);
+                $contact->user_id = auth()->user()->id;
+                $contact->save();
+
+                CsvData::where('id', $request->csv_data_file_id)->update(array('csv_status' => 2));
             }
 
-            $contact->csv_data_id = $request->csv_data_file_id;
-            $contact->credit_card = $creditCardNumber?self::cryptCreditCardNumber($creditCardNumber):'';
-            $contact->franchise = self::evalFranchise($creditCardNumber, $error);
-            $contact->status = count($error)?2:1;
-            $contact->error = implode(' | ',$error);
-            $contact->user_id = auth()->user()->id;
-            $contact->save();
+            \DB::table('csv_data as f')
+                ->join('contacts as c', 'c.csv_data_id', '=', 'f.id')
+                ->where('C.status', 2)
+                ->update(['f.csv_status' => '3']);
 
-            CsvData::where('id', $request->csv_data_file_id)->update(array('csv_status' => 2));
+            \DB::table('csv_data as f')
+                ->join('contacts as c', 'c.csv_data_id', '=', 'f.id')
+                ->where('C.status',1)
+                ->update(['f.csv_status' => '4']);
+
+            return view('import_success');
+        }catch (\ErrorException $e){
+            $error = sprintf('[%d] ERROR:[%s]', __LINE__, json_encode($e->getMessage(), true));
+
+            return view('import_failed', compact('error'));
+
         }
 
-        \DB::table('csv_data as f')
-            ->join('contacts as c', 'c.csv_data_id', '=', 'f.id')
-            ->where('C.status', 2)
-            ->update(['f.csv_status' => '3']);
-
-        \DB::table('csv_data as f')
-            ->join('contacts as c', 'c.csv_data_id', '=', 'f.id')
-            ->where('C.status',1)
-            ->update(['f.csv_status' => '4']);
-
-        return view('import_success');
     }
 
     private function cryptCreditCardNumber($creditCardNumber){
@@ -179,7 +187,7 @@ class ImportController extends Controller
         if(!empty($creditCardNumber)){
             $franchise = self::checkCreditCardNumber($creditCardNumber);
         }
-        if(empty($franchise)){
+        if(empty($franchise) || $franchise=='Not found'){
             $error[] = "Credit Card Number not valid";
         }
         return $franchise;
