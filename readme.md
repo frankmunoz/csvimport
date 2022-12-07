@@ -1,6 +1,5 @@
 
 
-## Koombea Assesment
 ## _Import CSV in laravel_
 
 Project showing how to import data from __CSV file__, also matching CSV columns with database columns, validate fields and set status to contacts and __CSV files__ uploaded.
